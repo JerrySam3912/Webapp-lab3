@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Task 2.2 – GitHub Repository Finder</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      min-height: 100vh;
+      padding: 24px;
+      color: #111827;
+    }
+    .container { max-width: 980px; margin: 0 auto; }
+    h1 { color: #fff; text-align: center; margin: 0 0 20px; }
+    .toolbar {
+      background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+    }
+    .toolbar input, .toolbar select, .toolbar button {
+      height: 42px; border-radius: 10px; border: 2px solid #e5e7eb; padding: 0 12px; font-size: 15px;
+    }
+    .toolbar input { width: 100%; }
+    .toolbar select { min-width: 150px; }
+    .toolbar button {
+      background: #4f46e5; color: white; border: none; cursor: pointer;
+      transition: transform .05s ease, opacity .2s ease;
+    }
+    .toolbar button:active { transform: scale(0.98); }
+    .status { margin-top: 12px; }
+    .error { background: #ef4444; color: #fff; padding: 12px 14px; border-radius: 10px; display: none; }
+    .note { background: #fef3c7; color: #92400e; padding: 10px 12px; border-radius: 10px; display: none; margin-top: 8px; }
+    .loading { text-align: center; color: #fff; font-size: 16px; padding: 24px 0; display: none; }
+    .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .card {
+      background: #fff; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); padding: 16px;
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+    }
+    .repo-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; color: #111827; }
+    .desc { color: #374151; margin-bottom: 10px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 14px; color: #374151; }
+    .badge { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; border-radius: 999px; padding: 3px 10px; }
+    .gh-link a { text-decoration: none; color: #4f46e5; }
+    .footer-note { text-align:center; color:#e5e7eb; font-size: 13px; margin-top: 14px; }
+    .actions { display:flex; justify-content:center; margin-top: 10px; }
+    .btn-more {
+      background: #111827; color: #fff; border:none; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    }
+    @media (min-width: 740px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub Repository Finder</h1>
+    <div class="toolbar">
+      <input id="q" type="text" placeholder="Search repositories (e.g., react router, node express)"
+             onkeypress="if(event.key==='Enter') runSearch(true)" />
+      <select id="sort">
+        <option value="">Best match</option>
+        <option value="stars">Stars</option>
+        <option value="forks">Forks</option>
+        <option value="updated">Recently updated</option>
+      </select>
+      <button id="btnSearch" onclick="runSearch(true)">Search</button>
+      <div style="grid-column: 1 / -1">
+        <div id="error" class="error"></div>
+        <div id="note" class="note"></div>
+      </div>
+    </div>
+
+    <div id="loading" class="loading">Loading...</div>
+    <div id="results" class="grid"></div>
+    <div class="actions"><button id="loadMore" class="btn-more" style="display:none;" onclick="runSearch(false)">Load more</button></div>
+
+    <p class="footer-note">Built for Lab Task 2.2 – GitHub Search API</p>
+  </div>
+
+  <script>
+    const PER_PAGE = 10;
+    let state = { q: "", sort: "", page: 1, isLoading: false, total: 0 };
+
+    function setLoading(v){
+      state.isLoading = v;
+      document.getElementById('loading').style.display = v ? 'block' : 'none';
+      document.getElementById('btnSearch').disabled = v;
+      document.getElementById('btnSearch').style.opacity = v ? 0.7 : 1;
+    }
+    function showError(msg){ const el = document.getElementById('error'); el.textContent = msg; el.style.display = msg ? 'block':'none'; }
+    function showNote(msg){ const el = document.getElementById('note'); el.textContent = msg; el.style.display = msg ? 'block':'none'; }
+
+    function repoCard(r){
+      const lang = r.language ? `<span class="badge">${r.language}</span>` : "";
+      const license = r.license?.spdx_id ? `<span class="badge">${r.license.spdx_id}</span>` : "";
+      return `
+        <div class="card">
+          <div>
+            <div class="repo-title">${r.full_name}</div>
+            <div class="desc">${r.description ?? ""}</div>
+            <div class="meta">
+              <span>⭐ ${r.stargazers_count.toLocaleString()}</span>
+              <span>🔱 ${r.forks_count.toLocaleString()} forks</span>
+              ${lang} ${license}
+            </div>
+          </div>
+          <div class="gh-link"><a href="${r.html_url}" target="_blank" rel="noopener">Open ↗</a></div>
+        </div>
+      `;
+    }
+
+    async function searchGithub(q, sort, page){
+      // Build query
+      const params = new URLSearchParams();
+      params.set('q', q);
+      if (sort) { params.set('sort', sort); params.set('order', 'desc'); } // best match if sort is empty
+      params.set('per_page', PER_PAGE);
+      params.set('page', page);
+      const url = `https://api.github.com/search/repositories?${params.toString()}`;
+
+      const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } });
+      if (res.status === 403) {
+        // Possibly rate limited
+        const remaining = res.headers.get('x-ratelimit-remaining');
+        const reset = res.headers.get('x-ratelimit-reset');
+        let msg = 'GitHub rate limit reached. Please try again later.';
+        if (remaining === '0' && reset) {
+          const seconds = Math.max(0, parseInt(reset, 10) - Math.floor(Date.now()/1000));
+          const mins = Math.ceil(seconds/60);
+          msg += ` (~${mins} min)`;
+        }
+        throw new Error(msg);
+      }
+      if (!res.ok) throw new Error('Failed to fetch from GitHub.');
+      return res.json();
+    }
+
+    function clearResults(){ document.getElementById('results').innerHTML = ""; }
+
+    async function runSearch(reset){
+      const q = document.getElementById('q').value.trim();
+      const sort = document.getElementById('sort').value;
+      if (!q) { showError('Please enter a keyword.'); return; }
+      showError(""); showNote("");
+
+      if (reset) { state.page = 1; state.q = q; state.sort = sort; clearResults(); }
+      setLoading(true);
+      try {
+        const data = await searchGithub(state.q, state.sort, state.page);
+        state.total = data.total_count ?? 0;
+
+        const grid = document.getElementById('results');
+        const cards = (data.items || []).map(repoCard).join("");
+        grid.insertAdjacentHTML('beforeend', cards);
+
+        // Toggle Load More
+        const shown = grid.children.length;
+        const hasMore = shown < state.total && (data.items || []).length === PER_PAGE;
+        document.getElementById('loadMore').style.display = hasMore ? 'inline-block' : 'none';
+
+        if (state.page === 1 && state.total === 0) showError('No repositories found. Try another keyword.');
+        if (state.page === 1 && state.total > 0) showNote(`${state.total.toLocaleString()} repositories matched. Showing ${Math.min(shown, state.total)}.`);
+
+        state.page += 1;
+      } catch (e){
+        showError(e.message || 'Something went wrong.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  </script>
+</body>
+</html>
