@@ -224,6 +224,282 @@ Everything updates instantly without reloading.
 
 ---
 
+# 🌦️ Task 2.1 – Weather Dashboard
+
+### 🎯 Overview  
+This task builds a **Weather Dashboard** web app that fetches **current weather** and a **5-day forecast** from the **OpenWeatherMap API**, displaying the data dynamically without reloading the page.  
+It trains the ability to use:  
+- **DOM manipulation** for updating UI elements  
+- **Event handling** (input + button + keypress)  
+- **`fetch()` with `async/await`** for asynchronous API calls  
+- **JSON parsing & array processing**  
+- **LocalStorage** for recent search history  
+- **UI state management** (loading, error, results)
+
+---
+
+### 💻 Features Implemented  
+- 🔍 Search weather by city name (e.g. *London*, *Ho Chi Minh*, *Tokyo*)  
+- 🌤️ Display **current conditions**: temperature, humidity, wind, pressure, and emoji icon based on weather type  
+- 📅 Show **5-day forecast** (1 card per day around 12:00)  
+- ⏳ Show **loading indicator** and **error messages** (city not found / network issues)  
+- 🕓 Save **recent searches** (top 5, clickable chips) via LocalStorage  
+- 💎 Responsive UI layout (1 column on mobile, 2 columns on desktop)
+
+---
+
+### 🧠 Code Flow Explanation  
+
+#### 1️⃣ When the page loads  
+- Calls `init()` → renders recent search chips from LocalStorage (`renderRecentSearches()`).  
+- The search input listens for **Enter** key and the button for **click** to trigger `searchWeather()`.
+
+#### 2️⃣ When user searches a city  
+- `searchWeather()` is called →  
+  1. Reads `cityInput.value`.  
+  2. If empty → `showError('Please enter a city name.')`.  
+  3. Otherwise:  
+     - Clears previous errors and UI.  
+     - Calls `setLoading(true)` → shows “Loading weather data…” text and disables button.  
+     - Executes `Promise.all([fetchWeather(city), fetchForecast(city)])`.  
+     - On success:  
+       - `displayWeather(current)` → renders current card (city, country, temp, humidity, wind, pressure + emoji).  
+       - `displayForecast(forecast)` → creates 5 forecast cards.  
+       - `saveRecentSearch(city)` → updates LocalStorage & re-renders chips.  
+     - On error → `showError(err.message)`.  
+     - Finally → `setLoading(false)`.
+
+#### 3️⃣ Helper Functions and Logic  
+- `selectEmoji(main)` → maps weather main type to emoji ☀️/☁️/🌧️/⛈️/❄️/🌫️.  
+- `kmh(ms)` → convert wind speed m/s → km/h.  
+- `setLoading(isLoading)` → toggles visibility and button state.  
+- `saveRecentSearch(city)` / `renderRecentSearches()` → store max 5 unique (city names case-insensitive).  
+- `quickSearch(city)` → fills input and triggers `searchWeather()` when a chip is clicked.  
+
+#### 4️⃣ Forecast selection logic  
+- API returns 3-hour intervals (40 items).  
+- Prefer items with `dt_txt` ≈ `12:00:00` (each day).  
+- If < 5 found, fill by taking every 8th item until 5 days are covered.
+
+---
+
+### 🧭 Complete User Flow Summary  
+
+```
+[Page Load]
+ └─ init()
+      ↳ renderRecentSearches()
+
+[User types city + presses Enter or clicks Search]
+ └─ searchWeather()
+      ↳ validate input
+      ↳ setLoading(true)
+      ↳ fetchWeather() + fetchForecast()
+           ↳ displayWeather()
+           ↳ displayForecast()
+      ↳ saveRecentSearch()
+      ↳ setLoading(false)
+
+[Click on Recent Chip]
+ └─ quickSearch(city)
+      ↳ sets input → searchWeather()
+```
+
+---
+
+### 🧩 Edge Cases  
+- ❌ Empty input → “Please enter a city name.”  
+- ❌ Invalid city (404) → “City not found. Please check the name.”  
+- ⚠️ Network error or API key problem → “Failed to fetch …”  
+- ⚠️ Opened as `file:///` → Fetch blocked (CORS) → must use local server.  
+- ⚠️ Recent searches > 5 → oldest removed.  
+
+---
+
+### ✅ Example Scenario  
+1. User opens the app → recent search chips (0 or few last cities).  
+2. Types **Ho Chi Minh** → presses Search.  
+3. App shows “Loading weather data…” → then cards with current temp and forecast.  
+4. Types **Tokyo** → adds a new chip below.  
+5. Clicks old chip **Ho Chi Minh** → instantly reloads its weather.  
+6. After 5+ different cities, only the latest five remain.  
+
+---
+
+### 🧾 Configuration and Testing  
+**API Key setup:**  
+```js
+const API_KEY = "YOUR_OPENWEATHER_API_KEY";
+```
+**Testing Checklist:**  
+- ✅ Valid city → renders current + 5-day forecast  
+- ❌ Invalid city → error message  
+- ⚡ Disconnect Internet → network error displayed  
+- 🔁 >5 searches → only latest 5 shown  
+- 📅 Forecast shows exactly 5 cards  
+
+---
+
+### 📁 File Structure  
+- **App:** `task2-1-weather-dashboard-fixed.html`  
+- Contains all HTML, CSS, JS logic in one file.  
+- Uses Live Server to avoid CORS issues.
+
+---
+
+### 📚 Key Takeaways  
+- Demonstrates integration with a **real-time API** (OpenWeatherMap).  
+- Reinforces **asynchronous programming** and **UI state management**.  
+- Uses **LocalStorage** to preserve user search history.  
+- Employs clean component-like functions for rendering and error handling.  
+- A solid practice of fetching data → transforming it → rendering DOM dynamically.
+
+---
+
+# 🔍 Task 2.2 – GitHub Repository Finder
+
+### 🎯 Overview
+This task builds a **GitHub Repository Finder** web application using the **GitHub Search API**.  
+It allows users to search repositories by keywords, apply sort options, and view paginated results dynamically without page reload.  
+The task focuses on mastering:  
+- **Fetch API + async/await**
+- **DOM manipulation** for rendering repo cards
+- **Event handling** for search, sort, and pagination
+- **JSON parsing** and handling query parameters
+- **UX state management** (loading, errors, rate limit messages)
+
+---
+
+### 💻 Features Implemented
+- 🔎 Search repositories by keyword (e.g., `react`, `node express`)
+- ⚙️ Sort results by **Best match**, **Stars**, **Forks**, or **Recently updated**
+- 📄 Paginate results using “Load more” (10 items per page)
+- ⭐ Display repository info: **name**, **description**, **stars**, **forks**, **language**, **license**, and **Open on GitHub** link
+- 🚫 Handle rate limit errors and display ETA until next allowed request
+- 💎 Responsive 1–2 column layout for repository cards
+
+---
+
+### 🧠 Code Flow Explanation
+
+#### 1️⃣ When the page loads
+- The app defines a global `state` object containing `{ q, sort, page, isLoading, total }`.
+- The input, select box, and buttons are wired with event handlers:
+  - **Enter key** or **Search button** → `runSearch(true)`
+  - **Load more** button → `runSearch(false)`
+- The main UI elements are hidden or disabled until data is fetched.
+
+#### 2️⃣ When user performs a search
+- `runSearch(true)` is triggered:
+  1. Reads keyword from `#q` and sort option from `#sort`.
+  2. Validates input — if empty → `showError('Please enter a keyword.')`.
+  3. Clears previous errors and results.
+  4. Calls `setLoading(true)` → shows “Loading...” and disables button.
+  5. Executes `searchGithub(q, sort, page)`:
+     - Builds URLSearchParams.
+     - Fetches from `https://api.github.com/search/repositories` with header `Accept: application/vnd.github+json`.
+     - Parses response JSON.
+     - Handles 403 errors (rate limit) using headers `x-ratelimit-remaining` and `x-ratelimit-reset`.
+  6. Displays the first 10 repositories via `repoCard()`.
+  7. If results remain → shows **Load more** button.
+  8. Increments page counter.
+  9. Calls `setLoading(false)`.
+
+#### 3️⃣ When clicking “Load more”
+- Calls `runSearch(false)` → repeats the same keyword and sort from state.
+- Appends the next 10 results to the grid without clearing previous ones.
+- Hides the button if fewer than 10 results are returned.
+
+#### 4️⃣ Helper Functions
+- `repoCard(r)` → builds HTML card for each repository with title, desc, stars, forks, language, and license.  
+- `setLoading(v)` → toggles button state and loading spinner.  
+- `showError(msg)` / `showNote(msg)` → display error or summary notes.  
+- `clearResults()` → empties the results grid when resetting a search.
+
+---
+
+### 🧭 Complete User Flow Summary
+
+```
+[Page Load]
+ └─ state initialized
+ └─ UI ready (input, sort, search button)
+
+[User enters keyword + clicks Search]
+ └─ runSearch(true)
+      ↳ validate input
+      ↳ setLoading(true)
+      ↳ searchGithub()
+           ↳ fetch from API
+           ↳ parse results / handle rate limit
+      ↳ render repoCard() list
+      ↳ toggle Load more
+      ↳ setLoading(false)
+
+[User clicks Load more]
+ └─ runSearch(false)
+      ↳ append next page of results
+      ↳ hide button if no more
+```
+
+---
+
+### 🧩 Edge Cases
+- ❌ Empty keyword → “Please enter a keyword.”  
+- ❌ No results → “No repositories found. Try another keyword.”  
+- ⚠️ Rate limit reached (403) → shows ETA in minutes.  
+- ⚠️ Network error or bad status → “Failed to fetch from GitHub.”  
+- ⚙️ Load more disabled if fewer than 10 items returned.
+
+---
+
+### ✅ Example Scenario
+1. User opens the app → input box and sort dropdown appear.  
+2. Types **react** → clicks **Search**.  
+3. “Loading...” appears briefly, then 10 repositories show up.  
+4. Clicks **Load more** → next 10 repos appear appended below.  
+5. Changes sort to **Stars** → results reloaded in descending star order.  
+6. Quickly spams search → hits rate limit → friendly message “GitHub rate limit reached (~1 min)”.  
+
+---
+
+### 🧾 API Reference and Testing
+
+**Endpoint:**  
+```
+GET https://api.github.com/search/repositories?q=<keyword>&sort=<stars|forks|updated>&order=desc&per_page=10&page=<n>
+```
+
+**Headers:**  
+```
+Accept: application/vnd.github+json
+```
+
+**Testing Checklist:**  
+- ✅ Search with `react` → results appear  
+- ✅ Sort by `stars` → highest first  
+- ✅ Click “Load more” → appends next results  
+- ❌ Empty input → shows warning  
+- ⚠️ Spam requests → rate limit handled gracefully  
+
+---
+
+### 📁 File Structure
+- **App:** `task2-2-github-finder.html`  
+- All HTML, CSS, and JS logic in one file  
+- Requires Live Server or local host (no API token needed)
+
+---
+
+### 📚 Key Takeaways
+- Practical usage of **GitHub REST API** and `fetch()` error handling.  
+- Shows how to manage **pagination and dynamic rendering**.  
+- Demonstrates **async/await**, **state-driven UI**, and **user feedback flow**.  
+- Teaches graceful handling of **rate limits** and real-time user experience control.  
+- Strengthens understanding of front-end API-driven applications.
+
+
+
 **Author:** [Hoang Xuan Dung]  
 **Course:** Web application Development Laboratory 
 
